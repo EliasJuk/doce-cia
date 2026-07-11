@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/categories/recipe_category.dart';
 import '../../models/recipes/recipe.dart';
 import '../../repositories/recipes/recipe_repository.dart';
+import 'recipe_form_page.dart';
 
 class CategoryRecipesPage extends StatefulWidget {
   const CategoryRecipesPage({
@@ -73,14 +74,21 @@ class _CategoryRecipesPageState extends State<CategoryRecipesPage> {
     }
   }
 
-  void _openRecipeForm() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          '',
+  Future<void> _openRecipeForm([
+    Recipe? recipe,
+  ]) async {
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => RecipeFormPage(
+          category: widget.category,
+          recipe: recipe,
         ),
       ),
     );
+
+    if (changed == true) {
+      await _loadRecipes();
+    }
   }
 
   @override
@@ -95,7 +103,11 @@ class _CategoryRecipesPageState extends State<CategoryRecipesPage> {
       ),
       floatingActionButton: FloatingActionButton(
         heroTag: 'add_recipe_${widget.category.id}',
-        onPressed: _loading ? null : _openRecipeForm,
+        onPressed: _loading
+            ? null
+            : () {
+                _openRecipeForm();
+              },
         child: const Icon(Icons.add_rounded),
       ),
     );
@@ -180,8 +192,12 @@ class _CategoryRecipesPageState extends State<CategoryRecipesPage> {
             subtitle: Text(
               '${recipe.yieldQuantity} ${recipe.yieldUnit}',
             ),
-            trailing: const Icon(Icons.chevron_right_rounded),
-            onTap: () {},
+            trailing: const Icon(
+              Icons.chevron_right_rounded,
+            ),
+            onTap: () {
+              _openRecipeForm(recipe);
+            },
           ),
         );
       },
