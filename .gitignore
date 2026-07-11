@@ -1,13 +1,20 @@
+# ============================================================
+# Flutter
+# ============================================================
+
 # Miscellaneous
 *.class
 *.lock
+!pubspec.lock
 *.log
 *.pyc
 *.swp
 .buildlog/
 .history
 
-
+# ============================================================
+# Dart / Flutter
+# ============================================================
 
 # Flutter repo-specific
 /bin/cache/
@@ -46,16 +53,34 @@ linked_*.ds
 unlinked.ds
 unlinked_spec.ds
 
+# ============================================================
+# Android
+# ============================================================
+
 # Android related
-**/android/**/gradle-wrapper.jar
+
 .gradle/
 **/android/captures/
-**/android/gradlew
-**/android/gradlew.bat
+#**/android/**/gradle-wrapper.jar
+#**/android/gradlew
+#**/android/gradlew.bat
 **/android/local.properties
 **/android/**/GeneratedPluginRegistrant.java
 **/android/key.properties
+
+# Android signing files
+android/key.properties
+key.properties
 *.jks
+*.keystore
+
+# Android generated builds
+*.apk
+*.aab
+
+# ============================================================
+# iOS
+# ============================================================
 
 # iOS/XCode related
 **/ios/**/*.mode1v3
@@ -87,6 +112,10 @@ unlinked_spec.ds
 **/ios/ServiceDefinitions.json
 **/ios/Runner/GeneratedPluginRegistrant.*
 
+# ============================================================
+# Desktop
+# ============================================================
+
 # macOS
 **/Flutter/ephemeral/
 **/Pods/
@@ -104,11 +133,23 @@ unlinked_spec.ds
 **/linux/flutter/generated_plugin_registrant.h
 **/linux/flutter/generated_plugins.cmake
 
+# ============================================================
+# Coverage
+# ============================================================
+
 # Coverage
 coverage/
 
+# ============================================================
+# Symbols
+# ============================================================
+
 # Symbols
 app.*.symbols
+
+# ============================================================
+# Exceptions
+# ============================================================
 
 # Exceptions to above rules.
 !**/ios/**/default.mode1v3
@@ -117,3 +158,17 @@ app.*.symbols
 !**/ios/**/default.perspectivev3
 !/packages/flutter_tools/test/data/dart_dependencies_test/**/.packages
 !/dev/ci/**/Gemfile.lock
+
+# ============================================================
+# IDEs
+# ============================================================
+
+# VS Code
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/launch.json
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
