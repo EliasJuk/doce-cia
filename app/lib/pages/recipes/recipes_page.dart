@@ -14,6 +14,7 @@ class RecipesPage extends StatelessWidget {
           right: 20,
           bottom: 20,
           child: FloatingActionButton(
+            heroTag: 'add_recipe',
             onPressed: null,
             child: Icon(Icons.add_rounded),
           ),
