@@ -6,7 +6,9 @@ class ThemeController extends ChangeNotifier {
   ThemeMode get themeMode => _themeMode;
 
   void setThemeMode(ThemeMode mode) {
-    if (_themeMode == mode) return;
+    if (_themeMode == mode) {
+      return;
+    }
 
     _themeMode = mode;
     notifyListeners();
