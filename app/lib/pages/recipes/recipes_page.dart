@@ -4,6 +4,7 @@ import '../../models/categories/recipe_category.dart';
 import '../../repositories/categories/category_repository.dart';
 import 'category_form_page.dart';
 import 'widgets/recipe_category_card.dart';
+import 'category_recipes_page.dart';
 
 class RecipesPage extends StatefulWidget {
   const RecipesPage({
@@ -145,10 +146,10 @@ class _RecipesPageState extends State<RecipesPage> {
   void _openCategory(
     RecipeCategory category,
   ) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '',
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CategoryRecipesPage(
+          category: category,
         ),
       ),
     );
