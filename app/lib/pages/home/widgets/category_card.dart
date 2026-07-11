@@ -16,34 +16,23 @@ class CategoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final recipeLabel = recipeCount == 1 ? 'receita' : 'receitas';
-
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(24),
         child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 24,
-          ),
+          padding: const EdgeInsets.symmetric(vertical: 22),
           child: Column(
             children: [
-              Text(
-                emoji,
-                style: const TextStyle(fontSize: 46),
-              ),
-              const SizedBox(height: 16),
+              Text(emoji, style: const TextStyle(fontSize: 46)),
+              const SizedBox(height: 14),
               Text(
                 title,
-                textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 6),
               Text(
-                '$recipeCount $recipeLabel',
-                textAlign: TextAlign.center,
+                '$recipeCount receitas',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             ],
