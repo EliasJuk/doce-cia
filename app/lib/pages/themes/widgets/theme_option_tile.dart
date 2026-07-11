@@ -20,8 +20,6 @@ class ThemeOptionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isSelected = value == groupValue;
-
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -63,8 +61,6 @@ class ThemeOptionTile extends StatelessWidget {
                   }
                 },
               ),
-              if (isSelected)
-                const SizedBox(width: 2),
             ],
           ),
         ),
