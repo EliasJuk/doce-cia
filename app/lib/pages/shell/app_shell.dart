@@ -24,20 +24,24 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int _selectedIndex = 1;
 
-  final List<Widget> _pages = const [
-    IngredientsPage(),
-    HomePage(),
-    RecipesPage(),
-  ];
-
   final List<String> _titles = const [
     'Ingredientes',
     'Doce Cia',
     'Receitas',
   ];
 
+  List<Widget> get _pages => [
+        const IngredientsPage(),
+        HomePage(
+          onOpenRecipes: () => _selectBottomPage(2),
+        ),
+        const RecipesPage(),
+      ];
+
   void _selectBottomPage(int index) {
-    setState(() => _selectedIndex = index);
+    setState(() {
+      _selectedIndex = index;
+    });
   }
 
   void _openHome() {

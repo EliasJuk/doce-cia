@@ -31,7 +31,9 @@ class _DoceCiaAppState extends State<DoceCiaApp> {
           theme: AppTheme.light,
           darkTheme: AppTheme.dark,
           themeMode: _themeController.themeMode,
-          home: AppShell(themeController: _themeController),
+          home: AppShell(
+            themeController: _themeController,
+          ),
         );
       },
     );
