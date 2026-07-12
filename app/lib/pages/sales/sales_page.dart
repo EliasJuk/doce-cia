@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/sales/sale.dart';
 import '../../repositories/sales/sale_repository.dart';
+import '../../shared/widgets/pagination_bar.dart';
 import 'sale_form_page.dart';
 import 'widgets/sale_card.dart';
 
@@ -13,8 +14,8 @@ class SalesPage extends StatefulWidget {
 }
 
 class _SalesPageState extends State<SalesPage> {
-  // Quantidade de vendas carregadas por página.
-  static const int _pageSize = 30;
+  // Quantidade de vendas exibidas em cada página.
+  static const int _pageSize = 3;
 
   final SaleRepository _repository = SaleRepository();
   final ScrollController _scrollController = ScrollController();
@@ -26,73 +27,78 @@ class _SalesPageState extends State<SalesPage> {
     totalProfit: 0,
   );
 
-  bool _loading = true;
-  bool _loadingMore = false;
-  bool _hasMore = true;
+  // Página atual baseada em 1.
+  int _currentPage = 1;
+  int _totalItems = 0;
 
-  int _offset = 0;
+  bool _loading = true;
   String? _error;
+
+  int get _totalPages {
+    if (_totalItems == 0) {
+      return 0;
+    }
+
+    return (_totalItems / _pageSize).ceil();
+  }
+
+  int get _currentOffset {
+    return (_currentPage - 1) * _pageSize;
+  }
 
   @override
   void initState() {
     super.initState();
 
-    _scrollController.addListener(_handleScroll);
-    _reload();
+    _loadInitialData();
   }
 
   @override
   void dispose() {
-    _scrollController
-      ..removeListener(_handleScroll)
-      ..dispose();
-
+    _scrollController.dispose();
     super.dispose();
   }
 
-  void _handleScroll() {
-    if (!_scrollController.hasClients) {
-      return;
-    }
-
-    final position = _scrollController.position;
-
-    // Carrega a página seguinte um pouco antes de chegar ao final.
-    if (position.pixels >= position.maxScrollExtent - 300) {
-      _loadMore();
-    }
-  }
-
-  Future<void> _reload() async {
+  Future<void> _loadInitialData() async {
     setState(() {
       _loading = true;
-      _loadingMore = false;
-      _hasMore = true;
-      _offset = 0;
       _error = null;
     });
 
     try {
       final results = await Future.wait<Object>([
-        _repository.findPage(
-          limit: _pageSize,
-          offset: 0,
-        ),
+        _repository.countAll(),
         _repository.calculateTotals(),
       ]);
 
-      final sales = results[0] as List<Sale>;
+      final totalItems = results[0] as int;
       final totals = results[1] as SalesTotals;
 
       if (!mounted) {
         return;
       }
 
+      final totalPages = totalItems == 0
+          ? 0
+          : (totalItems / _pageSize).ceil();
+
+      if (totalPages > 0 && _currentPage > totalPages) {
+        _currentPage = totalPages;
+      }
+
+      final sales = await _repository.findPage(
+        limit: _pageSize,
+        offset: (_currentPage - 1) * _pageSize,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
       setState(() {
-        _sales = sales;
+        _totalItems = totalItems;
         _totals = totals;
-        _offset = sales.length;
-        _hasMore = sales.length == _pageSize;
+        _sales = sales;
       });
     } catch (error) {
       if (!mounted) {
@@ -109,62 +115,25 @@ class _SalesPageState extends State<SalesPage> {
         });
       }
     }
-
-    // Espera a lista ser desenhada e verifica se há espaço
-    // suficiente para rolar. Caso não haja, carrega outra página.
-    if (mounted && _error == null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _loadUntilScrollable();
-      });
-    }
   }
 
-  Future<void> _loadUntilScrollable() async {
-    if (!mounted ||
-        _loading ||
-        _loadingMore ||
-        !_hasMore ||
-        !_scrollController.hasClients) {
-      return;
-    }
-
-    final position = _scrollController.position;
-
-    // Se o conteúdo já ultrapassou a altura da tela,
-    // o carregamento seguinte ocorrerá pelo scroll normal.
-    if (position.maxScrollExtent > 0) {
-      return;
-    }
-
-    await _loadMore();
-
-    if (!mounted || !_hasMore) {
-      return;
-    }
-
-    // Aguarda os novos cards serem renderizados antes de verificar
-    // novamente se a tela já possui rolagem.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadUntilScrollable();
-    });
-  }
-
-  Future<void> _loadMore() async {
+  Future<void> _loadPage(int page) async {
     if (_loading ||
-        _loadingMore ||
-        !_hasMore ||
-        _error != null) {
+        page < 1 ||
+        page > _totalPages ||
+        page == _currentPage) {
       return;
     }
 
     setState(() {
-      _loadingMore = true;
+      _loading = true;
+      _error = null;
     });
 
     try {
-      final nextPage = await _repository.findPage(
+      final sales = await _repository.findPage(
         limit: _pageSize,
-        offset: _offset,
+        offset: (page - 1) * _pageSize,
       );
 
       if (!mounted) {
@@ -172,36 +141,36 @@ class _SalesPageState extends State<SalesPage> {
       }
 
       setState(() {
-        _sales = [
-          ..._sales,
-          ...nextPage,
-        ];
-
-        _offset += nextPage.length;
-
-        // Se vier menos que o tamanho da página,
-        // significa que não existem mais registros.
-        _hasMore = nextPage.length == _pageSize;
+        _currentPage = page;
+        _sales = sales;
       });
+
+      if (_scrollController.hasClients) {
+        await _scrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+        );
+      }
     } catch (error) {
       if (!mounted) {
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Não foi possível carregar mais vendas: $error',
-          ),
-        ),
-      );
+      setState(() {
+        _error = error.toString();
+      });
     } finally {
       if (mounted) {
         setState(() {
-          _loadingMore = false;
+          _loading = false;
         });
       }
     }
+  }
+
+  Future<void> _reload() async {
+    await _loadInitialData();
   }
 
   Future<void> _openForm([
@@ -216,7 +185,7 @@ class _SalesPageState extends State<SalesPage> {
     );
 
     if (changed == true) {
-      await _reload();
+      await _loadInitialData();
     }
   }
 
@@ -255,7 +224,25 @@ class _SalesPageState extends State<SalesPage> {
 
     try {
       await _repository.delete(sale.id!);
-      await _reload();
+
+      // Recarrega a contagem antes de buscar novamente a página.
+      final newTotalItems = await _repository.countAll();
+
+      if (!mounted) {
+        return;
+      }
+
+      final newTotalPages = newTotalItems == 0
+          ? 0
+          : (newTotalItems / _pageSize).ceil();
+
+      if (newTotalPages == 0) {
+        _currentPage = 1;
+      } else if (_currentPage > newTotalPages) {
+        _currentPage = newTotalPages;
+      }
+
+      await _loadInitialData();
     } catch (error) {
       if (!mounted) {
         return;
@@ -281,9 +268,23 @@ class _SalesPageState extends State<SalesPage> {
       appBar: AppBar(
         title: const Text('Vendas'),
       ),
-      body: RefreshIndicator(
-        onRefresh: _reload,
-        child: _buildContent(context),
+      body: Column(
+        children: [
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _reload,
+              child: _buildContent(context),
+            ),
+          ),
+          if (!_loading &&
+              _error == null &&
+              _totalPages > 1)
+            PaginationBar(
+              currentPage: _currentPage,
+              totalPages: _totalPages,
+              onPageChanged: _loadPage,
+            ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         heroTag: 'add_sale',
@@ -336,9 +337,8 @@ class _SalesPageState extends State<SalesPage> {
       );
     }
 
-    if (_sales.isEmpty) {
+    if (_totalItems == 0) {
       return ListView(
-        controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(32),
         children: [
@@ -364,16 +364,6 @@ class _SalesPageState extends State<SalesPage> {
       );
     }
 
-    /*
-     * Estrutura da lista:
-     *
-     * índice 0: resumo geral;
-     * índices seguintes: vendas;
-     * último índice opcional: indicador de carregamento.
-     */
-    final itemCount =
-        1 + _sales.length + (_loadingMore ? 1 : 0);
-
     return ListView.builder(
       controller: _scrollController,
       physics: const AlwaysScrollableScrollPhysics(),
@@ -383,7 +373,7 @@ class _SalesPageState extends State<SalesPage> {
         16,
         100,
       ),
-      itemCount: itemCount,
+      itemCount: 1 + _sales.length,
       itemBuilder: (context, index) {
         if (index == 0) {
           return Padding(
@@ -392,51 +382,53 @@ class _SalesPageState extends State<SalesPage> {
           );
         }
 
-        final saleIndex = index - 1;
+        final sale = _sales[index - 1];
 
-        if (saleIndex < _sales.length) {
-          final sale = _sales[saleIndex];
-
-          return SaleCard(
-            sale: sale,
-            onEdit: () {
-              _openForm(sale);
-            },
-            onDelete: () {
-              _deleteSale(sale);
-            },
-          );
-        }
-
-        return const Padding(
-          padding: EdgeInsets.symmetric(vertical: 24),
-          child: Center(
-            child: CircularProgressIndicator(),
-          ),
+        return SaleCard(
+          sale: sale,
+          onEdit: () {
+            _openForm(sale);
+          },
+          onDelete: () {
+            _deleteSale(sale);
+          },
         );
       },
     );
   }
 
   Widget _buildSummary() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          children: [
-            _SalesSummaryRow(
-              label: 'Total vendido',
-              value: _money(_totals.totalSales),
+    final firstItem = _currentOffset + 1;
+    final lastItem = (_currentOffset + _sales.length)
+        .clamp(0, _totalItems);
+
+    return Column(
+      children: [
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              children: [
+                _SalesSummaryRow(
+                  label: 'Total vendido',
+                  value: _money(_totals.totalSales),
+                ),
+                const Divider(height: 24),
+                _SalesSummaryRow(
+                  label: 'Resultado bruto',
+                  value: _money(_totals.totalProfit),
+                  emphasized: true,
+                ),
+              ],
             ),
-            const Divider(height: 24),
-            _SalesSummaryRow(
-              label: 'Resultado bruto',
-              value: _money(_totals.totalProfit),
-              emphasized: true,
-            ),
-          ],
+          ),
         ),
-      ),
+        const SizedBox(height: 8),
+        Text(
+          'Exibindo $firstItem–$lastItem de $_totalItems vendas',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ],
     );
   }
 }
