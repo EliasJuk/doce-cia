@@ -7,7 +7,7 @@ class AppDatabase {
   static final AppDatabase instance = AppDatabase._();
 
   static const String databaseName = 'doce_cia.db';
-  static const int databaseVersion = 1;
+  static const int databaseVersion = 3;
 
   Database? _database;
 
@@ -32,7 +32,22 @@ class AppDatabase {
         await database.execute('PRAGMA foreign_keys = ON');
       },
       onCreate: _createTables,
+      onUpgrade: _upgradeDatabase,
     );
+  }
+
+  Future<void> _upgradeDatabase(
+    Database database,
+    int oldVersion,
+    int newVersion,
+  ) async {
+    if (oldVersion < 2) {
+      await _createRecipeStepsTable(database);
+    }
+
+    if (oldVersion < 3) {
+      await _createSalesTable(database);
+    }
   }
 
   Future<void> _createTables(
@@ -102,8 +117,52 @@ class AppDatabase {
         )
       ''');
 
+      await _createRecipeStepsTable(transaction);
+      await _createSalesTable(transaction);
       await _insertInitialCategories(transaction);
     });
+  }
+
+  Future<void> _createRecipeStepsTable(
+    DatabaseExecutor database,
+  ) async {
+    await database.execute('''
+      CREATE TABLE recipe_steps (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        recipe_id INTEGER NOT NULL,
+        step_number INTEGER NOT NULL,
+        description TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+
+        FOREIGN KEY (recipe_id)
+          REFERENCES recipes(id)
+          ON DELETE CASCADE
+      )
+    ''');
+  }
+
+  Future<void> _createSalesTable(
+    DatabaseExecutor database,
+  ) async {
+    await database.execute('''
+      CREATE TABLE sales (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        recipe_id INTEGER,
+        recipe_name TEXT NOT NULL,
+        quantity REAL NOT NULL,
+        unit_price REAL NOT NULL,
+        unit_cost REAL NOT NULL,
+        sale_date TEXT NOT NULL,
+        notes TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+
+        FOREIGN KEY (recipe_id)
+          REFERENCES recipes(id)
+          ON DELETE SET NULL
+      )
+    ''');
   }
 
   Future<void> _insertInitialCategories(
