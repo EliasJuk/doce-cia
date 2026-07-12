@@ -7,7 +7,7 @@ class AppDatabase {
   static final AppDatabase instance = AppDatabase._();
 
   static const String databaseName = 'doce_cia.db';
-  static const int databaseVersion = 3;
+  static const int databaseVersion = 2;
 
   Database? _database;
 
