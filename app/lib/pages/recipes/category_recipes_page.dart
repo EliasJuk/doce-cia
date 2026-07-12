@@ -4,6 +4,7 @@ import '../../models/categories/recipe_category.dart';
 import '../../models/recipes/recipe.dart';
 import '../../repositories/recipes/recipe_repository.dart';
 import 'recipe_form_page.dart';
+import 'recipe_details_page.dart';
 
 class CategoryRecipesPage extends StatefulWidget {
   const CategoryRecipesPage({
@@ -89,6 +90,21 @@ class _CategoryRecipesPageState extends State<CategoryRecipesPage> {
     if (changed == true) {
       await _loadRecipes();
     }
+  }
+
+  Future<void> _openRecipeDetails(
+    Recipe recipe,
+  ) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => RecipeDetailsPage(
+          category: widget.category,
+          recipe: recipe,
+        ),
+      ),
+    );
+
+    await _loadRecipes();
   }
 
   @override
@@ -196,7 +212,7 @@ class _CategoryRecipesPageState extends State<CategoryRecipesPage> {
               Icons.chevron_right_rounded,
             ),
             onTap: () {
-              _openRecipeForm(recipe);
+              _openRecipeDetails(recipe);
             },
           ),
         );
