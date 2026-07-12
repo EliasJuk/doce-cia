@@ -86,16 +86,16 @@ class RecipeIngredientRepository {
         whereArgs: [recipeId],
       );
 
-      for (final item in ingredients) {
+      for (final ingredient in ingredients) {
         await transaction.insert(
           'recipe_ingredients',
           {
             'recipe_id': recipeId,
-            'ingredient_id': item.ingredientId,
-            'quantity': item.quantity,
-            'unit': item.unit,
-            'created_at': item.createdAt.toIso8601String(),
-            'updated_at': item.updatedAt.toIso8601String(),
+            'ingredient_id': ingredient.ingredientId,
+            'quantity': ingredient.quantity,
+            'unit': ingredient.unit,
+            'created_at': ingredient.createdAt.toIso8601String(),
+            'updated_at': ingredient.updatedAt.toIso8601String(),
           },
         );
       }
