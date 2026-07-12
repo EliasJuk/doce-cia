@@ -12,22 +12,6 @@ class SaleRepository {
     required int limit,
     required int offset,
   }) async {
-    if (limit <= 0) {
-      throw ArgumentError.value(
-        limit,
-        'limit',
-        'O limite deve ser maior que zero.',
-      );
-    }
-
-    if (offset < 0) {
-      throw ArgumentError.value(
-        offset,
-        'offset',
-        'O deslocamento não pode ser negativo.',
-      );
-    }
-
     final database = await _database.database;
 
     final rows = await database.query(
@@ -38,6 +22,25 @@ class SaleRepository {
     );
 
     return rows.map(Sale.fromMap).toList();
+  }
+
+  Future<int> countAll() async {
+    final database = await _database.database;
+
+    final result = await database.rawQuery(
+      '''
+      SELECT COUNT(*) AS total
+      FROM sales
+      ''',
+    );
+
+    final value = result.first['total'];
+
+    if (value is num) {
+      return value.toInt();
+    }
+
+    return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 
   Future<SalesTotals> calculateTotals() async {
