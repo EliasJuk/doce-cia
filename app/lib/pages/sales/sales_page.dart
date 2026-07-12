@@ -13,43 +13,75 @@ class SalesPage extends StatefulWidget {
 }
 
 class _SalesPageState extends State<SalesPage> {
-  final SaleRepository _repository =
-      SaleRepository();
+  static const int _pageSize = 30;
+
+  final SaleRepository _repository = SaleRepository();
+  final ScrollController _scrollController = ScrollController();
 
   List<Sale> _sales = const [];
 
+  SalesTotals _totals = const SalesTotals(
+    totalSales: 0,
+    totalProfit: 0,
+  );
+
   bool _loading = true;
+  bool _loadingMore = false;
+  bool _hasMore = true;
+
+  int _offset = 0;
   String? _error;
-
-  double get _totalSales {
-    return _sales.fold<double>(
-      0,
-      (total, sale) => total + sale.totalValue,
-    );
-  }
-
-  double get _totalProfit {
-    return _sales.fold<double>(
-      0,
-      (total, sale) => total + sale.grossProfit,
-    );
-  }
 
   @override
   void initState() {
     super.initState();
 
-    _loadSales();
+    _scrollController.addListener(_handleScroll);
+    _reload();
   }
 
-  Future<void> _loadSales() async {
+  @override
+  void dispose() {
+    _scrollController
+      ..removeListener(_handleScroll)
+      ..dispose();
+
+    super.dispose();
+  }
+
+  void _handleScroll() {
+    if (!_scrollController.hasClients) {
+      return;
+    }
+
+    final position = _scrollController.position;
+
+    // Carrega a próxima página um pouco antes de chegar ao final.
+    if (position.pixels >= position.maxScrollExtent - 300) {
+      _loadMore();
+    }
+  }
+
+  Future<void> _reload() async {
     setState(() {
       _loading = true;
+      _loadingMore = false;
+      _hasMore = true;
+      _offset = 0;
       _error = null;
     });
 
     try {
-      final sales = await _repository.findAll();
+      final results = await Future.wait([
+        _repository.findPage(
+          limit: _pageSize,
+          offset: 0,
+        ),
+        _repository.calculateTotals(),
+      ]);
+
+      final sales = results[0] as List<Sale>;
+      final totals = results[1] as SalesTotals;
 
       if (!mounted) {
         return;
@@ -57,6 +89,9 @@ class _SalesPageState extends State<SalesPage> {
 
       setState(() {
         _sales = sales;
+        _totals = totals;
+        _offset = sales.length;
+        _hasMore = sales.length == _pageSize;
       });
     } catch (error) {
       if (!mounted) {
@@ -75,6 +110,58 @@ class _SalesPageState extends State<SalesPage> {
     }
   }
 
+  Future<void> _loadMore() async {
+    if (_loading ||
+        _loadingMore ||
+        !_hasMore ||
+        _error != null) {
+      return;
+    }
+
+    setState(() {
+      _loadingMore = true;
+    });
+
+    try {
+      final nextPage = await _repository.findPage(
+        limit: _pageSize,
+        offset: _offset,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _sales = [
+          ..._sales,
+          ...nextPage,
+        ];
+
+        _offset += nextPage.length;
+        _hasMore = nextPage.length == _pageSize;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Não foi possível carregar mais vendas: $error',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingMore = false;
+        });
+      }
+    }
+  }
+
   Future<void> _openForm([
     Sale? sale,
   ]) async {
@@ -87,7 +174,7 @@ class _SalesPageState extends State<SalesPage> {
     );
 
     if (changed == true) {
-      await _loadSales();
+      await _reload();
     }
   }
 
@@ -124,8 +211,22 @@ class _SalesPageState extends State<SalesPage> {
       return;
     }
 
-    await _repository.delete(sale.id!);
-    await _loadSales();
+    try {
+      await _repository.delete(sale.id!);
+      await _reload();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Não foi possível excluir a venda: $error',
+          ),
+        ),
+      );
+    }
   }
 
   String _money(double value) {
@@ -139,7 +240,7 @@ class _SalesPageState extends State<SalesPage> {
         title: const Text('Vendas'),
       ),
       body: RefreshIndicator(
-        onRefresh: _loadSales,
+        onRefresh: _reload,
         child: _buildContent(context),
       ),
       floatingActionButton: FloatingActionButton(
@@ -167,9 +268,10 @@ class _SalesPageState extends State<SalesPage> {
         padding: const EdgeInsets.all(24),
         children: [
           const SizedBox(height: 100),
-          const Icon(
+          Icon(
             Icons.error_outline_rounded,
             size: 64,
+            color: Theme.of(context).colorScheme.error,
           ),
           const SizedBox(height: 16),
           Text(
@@ -179,7 +281,7 @@ class _SalesPageState extends State<SalesPage> {
           ),
           const SizedBox(height: 16),
           FilledButton(
-            onPressed: _loadSales,
+            onPressed: _reload,
             child: const Text('Tentar novamente'),
           ),
         ],
@@ -188,6 +290,7 @@ class _SalesPageState extends State<SalesPage> {
 
     if (_sales.isEmpty) {
       return ListView(
+        controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(32),
         children: [
@@ -213,7 +316,17 @@ class _SalesPageState extends State<SalesPage> {
       );
     }
 
-    return ListView(
+    /*
+     * Temos:
+     * 1 item para o resumo;
+     * N itens de vendas;
+     * 1 item opcional para o carregamento final.
+     */
+    final itemCount =
+        1 + _sales.length + (_loadingMore ? 1 : 0);
+
+    return ListView.builder(
+      controller: _scrollController,
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(
         16,
@@ -221,41 +334,60 @@ class _SalesPageState extends State<SalesPage> {
         16,
         100,
       ),
-      children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Column(
-              children: [
-                _SalesSummaryRow(
-                  label: 'Total vendido',
-                  value: _money(_totalSales),
-                ),
-                const Divider(height: 24),
-                _SalesSummaryRow(
-                  label: 'Resultado bruto',
-                  value: _money(_totalProfit),
-                  emphasized: true,
-                ),
-              ],
-            ),
+      itemCount: itemCount,
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 18),
+            child: _buildSummary(),
+          );
+        }
+
+        final saleIndex = index - 1;
+
+        if (saleIndex < _sales.length) {
+          final sale = _sales[saleIndex];
+
+          return SaleCard(
+            sale: sale,
+            onEdit: () {
+              _openForm(sale);
+            },
+            onDelete: () {
+              _deleteSale(sale);
+            },
+          );
+        }
+
+        return const Padding(
+          padding: EdgeInsets.symmetric(vertical: 24),
+          child: Center(
+            child: CircularProgressIndicator(),
           ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSummary() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          children: [
+            _SalesSummaryRow(
+              label: 'Total vendido',
+              value: _money(_totals.totalSales),
+            ),
+            const Divider(height: 24),
+            _SalesSummaryRow(
+              label: 'Resultado bruto',
+              value: _money(_totals.totalProfit),
+              emphasized: true,
+            ),
+          ],
         ),
-        const SizedBox(height: 18),
-        ..._sales.map(
-          (sale) {
-            return SaleCard(
-              sale: sale,
-              onEdit: () {
-                _openForm(sale);
-              },
-              onDelete: () {
-                _deleteSale(sale);
-              },
-            );
-          },
-        ),
-      ],
+      ),
     );
   }
 }
