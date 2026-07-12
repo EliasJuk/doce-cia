@@ -13,6 +13,7 @@ class SalesPage extends StatefulWidget {
 }
 
 class _SalesPageState extends State<SalesPage> {
+  // Quantidade de vendas carregadas por página.
   static const int _pageSize = 30;
 
   final SaleRepository _repository = SaleRepository();
@@ -56,7 +57,7 @@ class _SalesPageState extends State<SalesPage> {
 
     final position = _scrollController.position;
 
-    // Carrega a próxima página um pouco antes de chegar ao final.
+    // Carrega a página seguinte um pouco antes de chegar ao final.
     if (position.pixels >= position.maxScrollExtent - 300) {
       _loadMore();
     }
@@ -72,7 +73,7 @@ class _SalesPageState extends State<SalesPage> {
     });
 
     try {
-      final results = await Future.wait([
+      final results = await Future.wait<Object>([
         _repository.findPage(
           limit: _pageSize,
           offset: 0,
@@ -108,6 +109,44 @@ class _SalesPageState extends State<SalesPage> {
         });
       }
     }
+
+    // Espera a lista ser desenhada e verifica se há espaço
+    // suficiente para rolar. Caso não haja, carrega outra página.
+    if (mounted && _error == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _loadUntilScrollable();
+      });
+    }
+  }
+
+  Future<void> _loadUntilScrollable() async {
+    if (!mounted ||
+        _loading ||
+        _loadingMore ||
+        !_hasMore ||
+        !_scrollController.hasClients) {
+      return;
+    }
+
+    final position = _scrollController.position;
+
+    // Se o conteúdo já ultrapassou a altura da tela,
+    // o carregamento seguinte ocorrerá pelo scroll normal.
+    if (position.maxScrollExtent > 0) {
+      return;
+    }
+
+    await _loadMore();
+
+    if (!mounted || !_hasMore) {
+      return;
+    }
+
+    // Aguarda os novos cards serem renderizados antes de verificar
+    // novamente se a tela já possui rolagem.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadUntilScrollable();
+    });
   }
 
   Future<void> _loadMore() async {
@@ -139,6 +178,9 @@ class _SalesPageState extends State<SalesPage> {
         ];
 
         _offset += nextPage.length;
+
+        // Se vier menos que o tamanho da página,
+        // significa que não existem mais registros.
         _hasMore = nextPage.length == _pageSize;
       });
     } catch (error) {
@@ -279,6 +321,12 @@ class _SalesPageState extends State<SalesPage> {
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.titleLarge,
           ),
+          const SizedBox(height: 8),
+          Text(
+            _error!,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
           const SizedBox(height: 16),
           FilledButton(
             onPressed: _reload,
@@ -317,10 +365,11 @@ class _SalesPageState extends State<SalesPage> {
     }
 
     /*
-     * Temos:
-     * 1 item para o resumo;
-     * N itens de vendas;
-     * 1 item opcional para o carregamento final.
+     * Estrutura da lista:
+     *
+     * índice 0: resumo geral;
+     * índices seguintes: vendas;
+     * último índice opcional: indicador de carregamento.
      */
     final itemCount =
         1 + _sales.length + (_loadingMore ? 1 : 0);
