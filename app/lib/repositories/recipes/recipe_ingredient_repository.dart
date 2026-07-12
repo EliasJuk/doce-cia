@@ -72,4 +72,33 @@ class RecipeIngredientRepository {
       whereArgs: [recipeId],
     );
   }
+
+  Future<void> replaceByRecipe(
+    int recipeId,
+    List<RecipeIngredient> ingredients,
+  ) async {
+    final database = await _database.database;
+
+    await database.transaction((transaction) async {
+      await transaction.delete(
+        'recipe_ingredients',
+        where: 'recipe_id = ?',
+        whereArgs: [recipeId],
+      );
+
+      for (final item in ingredients) {
+        await transaction.insert(
+          'recipe_ingredients',
+          {
+            'recipe_id': recipeId,
+            'ingredient_id': item.ingredientId,
+            'quantity': item.quantity,
+            'unit': item.unit,
+            'created_at': item.createdAt.toIso8601String(),
+            'updated_at': item.updatedAt.toIso8601String(),
+          },
+        );
+      }
+    });
+  }
 }
