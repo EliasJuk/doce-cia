@@ -8,15 +8,44 @@ class SaleRepository {
 
   final AppDatabase _database;
 
-  Future<List<Sale>> findAll() async {
+  Future<List<Sale>> findPage({
+    required int limit,
+    required int offset,
+  }) async {
     final database = await _database.database;
 
     final rows = await database.query(
       'sales',
       orderBy: 'sale_date DESC, id DESC',
+      limit: limit,
+      offset: offset,
     );
 
     return rows.map(Sale.fromMap).toList();
+  }
+
+  Future<SalesTotals> calculateTotals() async {
+    final database = await _database.database;
+
+    final rows = await database.rawQuery('''
+      SELECT
+        COALESCE(SUM(quantity * unit_price), 0) AS total_sales,
+        COALESCE(
+          SUM(
+            (quantity * unit_price) -
+            (quantity * unit_cost)
+          ),
+          0
+        ) AS total_profit
+      FROM sales
+    ''');
+
+    final row = rows.first;
+
+    return SalesTotals(
+      totalSales: (row['total_sales'] as num).toDouble(),
+      totalProfit: (row['total_profit'] as num).toDouble(),
+    );
   }
 
   Future<int> insert(Sale sale) async {
@@ -121,4 +150,14 @@ class SaleRepository {
 
     return recipeCost / yieldQuantity;
   }
+}
+
+class SalesTotals {
+  const SalesTotals({
+    required this.totalSales,
+    required this.totalProfit,
+  });
+
+  final double totalSales;
+  final double totalProfit;
 }
