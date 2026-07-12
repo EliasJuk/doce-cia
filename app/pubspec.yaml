@@ -37,12 +37,13 @@ flutter_launcher_icons:
 
 flutter_native_splash:
   color: "#FF8094"
-  image: assets/icons/cookie_logo.png
+  image: assets/icons/app_icon.png
+  
   android: true
   ios: true
   web: false
   fullscreen: true
+
   android_12:
     color: "#FF8094"
-    image: assets/icons/cookie_logo.png
-    icon_background_color: "#FF8094"
+    image: assets/icons/app_icon.png
