@@ -8,6 +8,7 @@ import '../home/home_page.dart';
 import '../ingredients/ingredients_page.dart';
 import '../recipes/recipes_page.dart';
 import '../themes/themes_page.dart';
+import '../sales/sales_page.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({
@@ -71,6 +72,16 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
+  void _openSales() {
+    Navigator.of(context).pop();
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const SalesPage(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -81,6 +92,7 @@ class _AppShellState extends State<AppShell> {
         onHomeTap: _openHome,
         onThemesTap: _openThemes,
         onAboutTap: _openAbout,
+        onSalesTap: _openSales,
       ),
       body: IndexedStack(
         index: _selectedIndex,
