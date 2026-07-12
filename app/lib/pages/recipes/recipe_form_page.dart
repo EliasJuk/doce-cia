@@ -25,15 +25,15 @@ class RecipeFormPage extends StatefulWidget {
 }
 
 class _RecipeFormPageState extends State<RecipeFormPage> {
-  final _formKey = GlobalKey<FormState>();
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
   final RecipeRepository _recipeRepository = RecipeRepository();
 
-  final RecipeIngredientRepository _recipeIngredientRepository =
-      RecipeIngredientRepository();
-
   final IngredientRepository _ingredientRepository =
       IngredientRepository();
+
+  final RecipeIngredientRepository _recipeIngredientRepository =
+      RecipeIngredientRepository();
 
   late final TextEditingController _nameController;
   late final TextEditingController _yieldQuantityController;
@@ -107,7 +107,9 @@ class _RecipeFormPageState extends State<RecipeFormPage> {
 
       if (recipeId != null) {
         recipeIngredients =
-            await _recipeIngredientRepository.findByRecipe(recipeId);
+            await _recipeIngredientRepository.findByRecipe(
+          recipeId,
+        );
       }
 
       if (!mounted) {
@@ -150,7 +152,8 @@ class _RecipeFormPageState extends State<RecipeFormPage> {
   double? _parseNumber(String value) {
     var normalized = value.trim();
 
-    if (normalized.contains(',') && normalized.contains('.')) {
+    if (normalized.contains(',') &&
+        normalized.contains('.')) {
       normalized = normalized
           .replaceAll('.', '')
           .replaceAll(',', '.');
@@ -214,14 +217,19 @@ class _RecipeFormPageState extends State<RecipeFormPage> {
       return 0;
     }
 
-    return _quantityInBaseUnit(recipeIngredient) *
-        ingredient.baseUnitCost;
+    final quantity = _quantityInBaseUnit(
+      recipeIngredient,
+    );
+
+    return quantity * ingredient.baseUnitCost;
   }
 
   double get _totalCost {
-    return _recipeIngredients.fold(
+    return _recipeIngredients.fold<double>(
       0,
-      (total, item) => total + _ingredientCost(item),
+      (total, item) {
+        return total + _ingredientCost(item);
+      },
     );
   }
 
@@ -252,10 +260,9 @@ class _RecipeFormPageState extends State<RecipeFormPage> {
       return;
     }
 
-    final result =
-        await showDialog<RecipeIngredient>(
+    final result = await showDialog<RecipeIngredient>(
       context: context,
-      builder: (_) {
+      builder: (dialogContext) {
         return RecipeIngredientForm(
           ingredients: _availableIngredients,
           current: current,
@@ -263,7 +270,7 @@ class _RecipeFormPageState extends State<RecipeFormPage> {
       },
     );
 
-    if (result == null) {
+    if (result == null || !mounted) {
       return;
     }
 
@@ -273,27 +280,29 @@ class _RecipeFormPageState extends State<RecipeFormPage> {
           ..._recipeIngredients,
           result,
         ];
-      } else {
-        final index = _recipeIngredients.indexOf(current);
 
-        if (index < 0) {
-          return;
-        }
-
-        final updated = [..._recipeIngredients];
-
-        updated[index] = RecipeIngredient(
-          id: current.id,
-          recipeId: current.recipeId,
-          ingredientId: result.ingredientId,
-          quantity: result.quantity,
-          unit: result.unit,
-          createdAt: current.createdAt,
-          updatedAt: DateTime.now(),
-        );
-
-        _recipeIngredients = updated;
+        return;
       }
+
+      final index = _recipeIngredients.indexOf(current);
+
+      if (index < 0) {
+        return;
+      }
+
+      final updated = [..._recipeIngredients];
+
+      updated[index] = RecipeIngredient(
+        id: current.id,
+        recipeId: current.recipeId,
+        ingredientId: result.ingredientId,
+        quantity: result.quantity,
+        unit: result.unit,
+        createdAt: current.createdAt,
+        updatedAt: DateTime.now(),
+      );
+
+      _recipeIngredients = updated;
     });
   }
 
@@ -302,7 +311,9 @@ class _RecipeFormPageState extends State<RecipeFormPage> {
   ) {
     setState(() {
       _recipeIngredients = _recipeIngredients
-          .where((item) => item != recipeIngredient)
+          .where(
+            (item) => item != recipeIngredient,
+          )
           .toList();
     });
   }
@@ -364,7 +375,6 @@ class _RecipeFormPageState extends State<RecipeFormPage> {
 
       if (_isEditing) {
         await _recipeRepository.update(recipe);
-
         recipeId = recipe.id!;
       } else {
         recipeId = await _recipeRepository.insert(recipe);
@@ -403,12 +413,14 @@ class _RecipeFormPageState extends State<RecipeFormPage> {
 
   @override
   Widget build(BuildContext context) {
+    final pageTitle = _isEditing
+        ? 'Editar receita'
+        : 'Nova receita';
+
     if (_loading) {
       return Scaffold(
         appBar: AppBar(
-          title: Text(
-            _isEditing ? 'Editar receita' : 'Nova receita',
-          ),
+          title: Text(pageTitle),
         ),
         body: const Center(
           child: CircularProgressIndicator(),
@@ -419,9 +431,7 @@ class _RecipeFormPageState extends State<RecipeFormPage> {
     if (_error != null) {
       return Scaffold(
         appBar: AppBar(
-          title: Text(
-            _isEditing ? 'Editar receita' : 'Nova receita',
-          ),
+          title: Text(pageTitle),
         ),
         body: Center(
           child: Padding(
@@ -429,13 +439,22 @@ class _RecipeFormPageState extends State<RecipeFormPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(
+                Icon(
                   Icons.error_outline_rounded,
                   size: 64,
+                  color: Theme.of(context).colorScheme.error,
                 ),
                 const SizedBox(height: 16),
-                const Text(
+                Text(
                   'Não foi possível carregar os dados.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _error!,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 16),
                 FilledButton(
@@ -451,9 +470,7 @@ class _RecipeFormPageState extends State<RecipeFormPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          _isEditing ? 'Editar receita' : 'Nova receita',
-        ),
+        title: Text(pageTitle),
       ),
       body: SafeArea(
         child: Form(
@@ -466,10 +483,11 @@ class _RecipeFormPageState extends State<RecipeFormPage> {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 20),
-
               TextFormField(
                 controller: _nameController,
-                textCapitalization: TextCapitalization.sentences,
+                enabled: !_saving,
+                textCapitalization:
+                    TextCapitalization.sentences,
                 decoration: const InputDecoration(
                   labelText: 'Nome da receita',
                   hintText: 'Ex.: Cookie tradicional',
@@ -479,11 +497,10 @@ class _RecipeFormPageState extends State<RecipeFormPage> {
                 ),
                 validator: _requiredText,
               ),
-
               const SizedBox(height: 16),
-
               TextFormField(
                 controller: _yieldQuantityController,
+                enabled: !_saving,
                 keyboardType:
                     const TextInputType.numberWithOptions(
                   decimal: true,
@@ -500,9 +517,7 @@ class _RecipeFormPageState extends State<RecipeFormPage> {
                   setState(() {});
                 },
               ),
-
               const SizedBox(height: 16),
-
               DropdownButtonFormField<String>(
                 initialValue: _selectedYieldUnit,
                 decoration: const InputDecoration(
@@ -512,7 +527,7 @@ class _RecipeFormPageState extends State<RecipeFormPage> {
                   ),
                 ),
                 items: _yieldUnits.map((unit) {
-                  return DropdownMenuItem(
+                  return DropdownMenuItem<String>(
                     value: unit,
                     child: Text(unit),
                   );
@@ -520,20 +535,22 @@ class _RecipeFormPageState extends State<RecipeFormPage> {
                 onChanged: _saving
                     ? null
                     : (unit) {
-                        if (unit != null) {
-                          setState(() {
-                            _selectedYieldUnit = unit;
-                          });
+                        if (unit == null) {
+                          return;
                         }
+
+                        setState(() {
+                          _selectedYieldUnit = unit;
+                        });
                       },
               ),
-
               const SizedBox(height: 16),
-
               TextFormField(
                 controller: _notesController,
+                enabled: !_saving,
                 maxLines: 4,
-                textCapitalization: TextCapitalization.sentences,
+                textCapitalization:
+                    TextCapitalization.sentences,
                 decoration: const InputDecoration(
                   labelText: 'Observação',
                   hintText: 'Opcional',
@@ -543,29 +560,28 @@ class _RecipeFormPageState extends State<RecipeFormPage> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 28),
-
               Row(
                 children: [
                   Expanded(
                     child: Text(
                       'Ingredientes',
-                      style: Theme.of(context).textTheme.titleLarge,
+                      style:
+                          Theme.of(context).textTheme.titleLarge,
                     ),
                   ),
                   TextButton.icon(
                     onPressed: _saving
                         ? null
-                        : () => _openIngredientForm(),
+                        : () {
+                            _openIngredientForm();
+                          },
                     icon: const Icon(Icons.add_rounded),
                     label: const Text('Adicionar'),
                   ),
                 ],
               ),
-
               const SizedBox(height: 8),
-
               if (_recipeIngredients.isEmpty)
                 Card(
                   child: Padding(
@@ -579,37 +595,18 @@ class _RecipeFormPageState extends State<RecipeFormPage> {
                         const SizedBox(height: 10),
                         Text(
                           'Nenhum ingrediente adicionado',
-                          style:
-                              Theme.of(context).textTheme.titleMedium,
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleMedium,
                         ),
                       ],
                     ),
                   ),
                 )
               else
-                ..._recipeIngredients.map((recipeIngredient) {
-                  final ingredient = _findIngredient(
-                    recipeIngredient.ingredientId,
-                  );
-
-                  if (ingredient == null) {
-                    return const SizedBox.shrink();
-                  }
-
-                  return RecipeIngredientCard(
-                    recipeIngredient: recipeIngredient,
-                    ingredient: ingredient,
-                    onEdit: () {
-                      _openIngredientForm(recipeIngredient);
-                    },
-                    onDelete: () {
-                      _removeIngredient(recipeIngredient);
-                    },
-                  );
-                }),
-
+                ..._buildIngredientCards(),
               const SizedBox(height: 20),
-
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(18),
@@ -621,7 +618,8 @@ class _RecipeFormPageState extends State<RecipeFormPage> {
                       ),
                       const SizedBox(height: 10),
                       _CostRow(
-                        label: 'Custo por $_selectedYieldUnit',
+                        label:
+                            'Custo por $_selectedYieldUnit',
                         value: _formatMoney(_costPerYield),
                         emphasized: true,
                       ),
@@ -629,9 +627,7 @@ class _RecipeFormPageState extends State<RecipeFormPage> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 28),
-
               FilledButton.icon(
                 onPressed: _saving ? null : _save,
                 icon: _saving
@@ -655,6 +651,35 @@ class _RecipeFormPageState extends State<RecipeFormPage> {
       ),
     );
   }
+
+  List<Widget> _buildIngredientCards() {
+    final cards = <Widget>[];
+
+    for (final recipeIngredient in _recipeIngredients) {
+      final ingredient = _findIngredient(
+        recipeIngredient.ingredientId,
+      );
+
+      if (ingredient == null) {
+        continue;
+      }
+
+      cards.add(
+        RecipeIngredientCard(
+          recipeIngredient: recipeIngredient,
+          ingredient: ingredient,
+          onEdit: () {
+            _openIngredientForm(recipeIngredient);
+          },
+          onDelete: () {
+            _removeIngredient(recipeIngredient);
+          },
+        ),
+      );
+    }
+
+    return cards;
+  }
 }
 
 class _CostRow extends StatelessWidget {
@@ -670,7 +695,7 @@ class _CostRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style = emphasized
+    final textStyle = emphasized
         ? Theme.of(context).textTheme.titleMedium
         : Theme.of(context).textTheme.bodyLarge;
 
@@ -679,12 +704,12 @@ class _CostRow extends StatelessWidget {
         Expanded(
           child: Text(
             label,
-            style: style,
+            style: textStyle,
           ),
         ),
         Text(
           value,
-          style: style?.copyWith(
+          style: textStyle?.copyWith(
             fontWeight: FontWeight.w800,
           ),
         ),
