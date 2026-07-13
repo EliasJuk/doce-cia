@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import '../../models/categories/recipe_category.dart';
 import '../../models/recipes/recipe.dart';
 import '../../repositories/recipes/recipe_repository.dart';
-import 'recipe_form_page.dart';
+import '../../shared/widgets/pagination_bar.dart';
 import 'recipe_details_page.dart';
+import 'recipe_form_page.dart';
 
 class CategoryRecipesPage extends StatefulWidget {
   const CategoryRecipesPage({
@@ -15,20 +16,52 @@ class CategoryRecipesPage extends StatefulWidget {
   final RecipeCategory category;
 
   @override
-  State<CategoryRecipesPage> createState() => _CategoryRecipesPageState();
+  State<CategoryRecipesPage> createState() =>
+      _CategoryRecipesPageState();
 }
 
-class _CategoryRecipesPageState extends State<CategoryRecipesPage> {
-  final RecipeRepository _repository = RecipeRepository();
+class _CategoryRecipesPageState
+    extends State<CategoryRecipesPage> {
+  static const int _pageSize = 20;
+
+  final RecipeRepository _repository =
+      RecipeRepository();
+
+  final ScrollController _scrollController =
+      ScrollController();
 
   List<Recipe> _recipes = const [];
+
+  int _currentPage = 1;
+  int _totalItems = 0;
+
   bool _loading = true;
   String? _error;
+
+  int get _totalPages {
+    if (_totalItems == 0) {
+      return 0;
+    }
+
+    return (_totalItems / _pageSize).ceil();
+  }
+
+  int get _currentOffset {
+    return (_currentPage - 1) * _pageSize;
+  }
 
   @override
   void initState() {
     super.initState();
+
     _loadRecipes();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+
+    super.dispose();
   }
 
   Future<void> _loadRecipes() async {
@@ -37,7 +70,8 @@ class _CategoryRecipesPageState extends State<CategoryRecipesPage> {
     if (categoryId == null) {
       setState(() {
         _loading = false;
-        _error = 'A coleção não possui um ID válido.';
+        _error =
+            'A coleção não possui um ID válido.';
       });
 
       return;
@@ -49,15 +83,95 @@ class _CategoryRecipesPageState extends State<CategoryRecipesPage> {
     });
 
     try {
-      final recipes = await _repository.findByCategory(categoryId);
+      final totalItems =
+          await _repository.countByCategory(
+        categoryId,
+      );
+
+      final totalPages = totalItems == 0
+          ? 0
+          : (totalItems / _pageSize).ceil();
+
+      if (totalPages == 0) {
+        _currentPage = 1;
+      } else if (_currentPage > totalPages) {
+        _currentPage = totalPages;
+      }
+
+      final recipes =
+          await _repository.findPageByCategory(
+        categoryId: categoryId,
+        limit: _pageSize,
+        offset: (_currentPage - 1) * _pageSize,
+      );
 
       if (!mounted) {
         return;
       }
 
       setState(() {
+        _totalItems = totalItems;
         _recipes = recipes;
       });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _error = error.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadPage(int page) async {
+    final categoryId = widget.category.id;
+
+    if (categoryId == null ||
+        _loading ||
+        page < 1 ||
+        page > _totalPages ||
+        page == _currentPage) {
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final recipes =
+          await _repository.findPageByCategory(
+        categoryId: categoryId,
+        limit: _pageSize,
+        offset: (page - 1) * _pageSize,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _currentPage = page;
+        _recipes = recipes;
+      });
+
+      if (_scrollController.hasClients) {
+        await _scrollController.animateTo(
+          0,
+          duration: const Duration(
+            milliseconds: 250,
+          ),
+          curve: Curves.easeOut,
+        );
+      }
     } catch (error) {
       if (!mounted) {
         return;
@@ -111,20 +225,40 @@ class _CategoryRecipesPageState extends State<CategoryRecipesPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.category.name),
+        title: Text(
+          widget.category.name,
+        ),
+        actions: [
+          IconButton(
+            tooltip: 'Nova receita',
+            onPressed: _loading
+                ? null
+                : () {
+                    _openRecipeForm();
+                  },
+            icon: const Icon(
+              Icons.add_rounded,
+            ),
+          ),
+        ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _loadRecipes,
-        child: _buildContent(context),
-      ),
-      floatingActionButton: FloatingActionButton(
-        heroTag: 'add_recipe_${widget.category.id}',
-        onPressed: _loading
-            ? null
-            : () {
-                _openRecipeForm();
-              },
-        child: const Icon(Icons.add_rounded),
+      body: Column(
+        children: [
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _loadRecipes,
+              child: _buildContent(context),
+            ),
+          ),
+          if (!_loading &&
+              _error == null &&
+              _totalPages > 1)
+            PaginationBar(
+              currentPage: _currentPage,
+              totalPages: _totalPages,
+              onPageChanged: _loadPage,
+            ),
+        ],
       ),
     );
   }
@@ -138,75 +272,127 @@ class _CategoryRecipesPageState extends State<CategoryRecipesPage> {
 
     if (_error != null) {
       return ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
+        physics:
+            const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(24),
         children: [
           const SizedBox(height: 100),
           Icon(
             Icons.error_outline_rounded,
             size: 64,
-            color: Theme.of(context).colorScheme.error,
+            color:
+                Theme.of(context).colorScheme.error,
           ),
           const SizedBox(height: 16),
           Text(
             'Não foi possível carregar as receitas.',
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleLarge,
+            style:
+                Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _error!,
+            textAlign: TextAlign.center,
+            style:
+                Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 16),
           FilledButton(
             onPressed: _loadRecipes,
-            child: const Text('Tentar novamente'),
+            child: const Text(
+              'Tentar novamente',
+            ),
           ),
         ],
       );
     }
 
-    if (_recipes.isEmpty) {
+    if (_totalItems == 0) {
       return ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
+        physics:
+            const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(32),
         children: [
           const SizedBox(height: 100),
           Text(
             widget.category.icon,
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 72),
+            style: const TextStyle(
+              fontSize: 72,
+            ),
           ),
           const SizedBox(height: 18),
           Text(
             'Nenhuma receita cadastrada',
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleLarge,
+            style:
+                Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 8),
           Text(
             'Adicione a primeira receita da coleção '
             '${widget.category.name}.',
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium,
+            style:
+                Theme.of(context).textTheme.bodyMedium,
           ),
         ],
       );
     }
 
     return ListView.builder(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-      itemCount: _recipes.length,
+      controller: _scrollController,
+      physics:
+          const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(
+        16,
+        16,
+        16,
+        80,
+      ),
+      itemCount: 1 + _recipes.length,
       itemBuilder: (context, index) {
-        final recipe = _recipes[index];
+        if (index == 0) {
+          final firstItem = _currentOffset + 1;
+
+          final lastItem =
+              (_currentOffset + _recipes.length)
+                  .clamp(0, _totalItems);
+
+          return Padding(
+            padding: const EdgeInsets.only(
+              bottom: 12,
+            ),
+            child: Text(
+              'Exibindo $firstItem–$lastItem '
+              'de $_totalItems receitas',
+              textAlign: TextAlign.center,
+              style:
+                  Theme.of(context).textTheme.bodySmall,
+            ),
+          );
+        }
+
+        final recipe = _recipes[index - 1];
 
         return Card(
-          margin: const EdgeInsets.only(bottom: 12),
+          margin: const EdgeInsets.only(
+            bottom: 12,
+          ),
           child: ListTile(
             leading: Text(
               widget.category.icon,
-              style: const TextStyle(fontSize: 30),
+              style: const TextStyle(
+                fontSize: 30,
+              ),
             ),
-            title: Text(recipe.name),
+            title: Text(
+              recipe.name,
+            ),
             subtitle: Text(
-              '${recipe.yieldQuantity} ${recipe.yieldUnit}',
+              '${recipe.yieldQuantity} '
+              '${recipe.yieldUnit}',
             ),
             trailing: const Icon(
               Icons.chevron_right_rounded,
