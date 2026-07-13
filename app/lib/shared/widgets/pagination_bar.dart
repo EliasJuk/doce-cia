@@ -5,15 +5,16 @@ class PaginationBar extends StatelessWidget {
     required this.currentPage,
     required this.totalPages,
     required this.onPageChanged,
-    this.visiblePageCount = 5,
+    this.visiblePageCount = 3,
     super.key,
   });
 
-  // As páginas são baseadas em 1:
-  // primeira página = 1.
   final int currentPage;
   final int totalPages;
   final ValueChanged<int> onPageChanged;
+
+  // Quantidade de páginas centrais exibidas quando existem
+  // muitas páginas.
   final int visiblePageCount;
 
   @override
@@ -22,103 +23,76 @@ class PaginationBar extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    final items = _buildPageItems();
+    final pageItems = _buildPageItems();
 
     return SafeArea(
       top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          12,
-          10,
-          12,
-          16,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            IconButton(
-              tooltip: 'Página anterior',
-              onPressed: currentPage > 1
-                  ? () {
-                      onPageChanged(currentPage - 1);
-                    }
-                  : null,
-              icon: const Icon(
-                Icons.chevron_left_rounded,
+      child: Material(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _NavigationButton(
+                tooltip: 'Página anterior',
+                icon: Icons.chevron_left_rounded,
+                enabled: currentPage > 1,
+                onPressed: () {
+                  onPageChanged(currentPage - 1);
+                },
               ),
-            ),
-            Flexible(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
+              const SizedBox(width: 4),
+              Flexible(
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
-                  children: items.map((item) {
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: pageItems.map((item) {
                     if (item == null) {
-                      return const Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: 5,
+                      return const SizedBox(
+                        width: 24,
+                        height: 36,
+                        child: Center(
+                          child: Text('…'),
                         ),
-                        child: Text('...'),
                       );
                     }
 
-                    final selected = item == currentPage;
-
                     return Padding(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 3,
+                        horizontal: 2,
                       ),
-                      child: selected
-                          ? FilledButton(
-                              onPressed: null,
-                              style: FilledButton.styleFrom(
-                                disabledBackgroundColor:
-                                    Theme.of(context)
-                                        .colorScheme
-                                        .primary,
-                                disabledForegroundColor:
-                                    Theme.of(context)
-                                        .colorScheme
-                                        .onPrimary,
-                                minimumSize: const Size(42, 42),
-                                padding: EdgeInsets.zero,
-                              ),
-                              child: Text('$item'),
-                            )
-                          : TextButton(
-                              onPressed: () {
-                                onPageChanged(item);
-                              },
-                              style: TextButton.styleFrom(
-                                minimumSize: const Size(42, 42),
-                                padding: EdgeInsets.zero,
-                              ),
-                              child: Text('$item'),
-                            ),
+                      child: _PageButton(
+                        page: item,
+                        selected: item == currentPage,
+                        onPressed: () {
+                          onPageChanged(item);
+                        },
+                      ),
                     );
                   }).toList(),
                 ),
               ),
-            ),
-            IconButton(
-              tooltip: 'Próxima página',
-              onPressed: currentPage < totalPages
-                  ? () {
-                      onPageChanged(currentPage + 1);
-                    }
-                  : null,
-              icon: const Icon(
-                Icons.chevron_right_rounded,
+              const SizedBox(width: 4),
+              _NavigationButton(
+                tooltip: 'Próxima página',
+                icon: Icons.chevron_right_rounded,
+                enabled: currentPage < totalPages,
+                onPressed: () {
+                  onPageChanged(currentPage + 1);
+                },
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
   List<int?> _buildPageItems() {
-    if (totalPages <= visiblePageCount + 2) {
+    // Até cinco páginas cabem confortavelmente na maioria
+    // das telas de celular.
+    if (totalPages <= 5) {
       return List<int>.generate(
         totalPages,
         (index) => index + 1,
@@ -127,23 +101,17 @@ class PaginationBar extends StatelessWidget {
 
     final items = <int?>[1];
 
-    final half = visiblePageCount ~/ 2;
-
-    var start = currentPage - half;
-    var end = currentPage + half;
-
-    if (visiblePageCount.isEven) {
-      end -= 1;
-    }
+    var start = currentPage - 1;
+    var end = currentPage + 1;
 
     if (start < 2) {
       start = 2;
-      end = start + visiblePageCount - 1;
+      end = 4;
     }
 
     if (end > totalPages - 1) {
       end = totalPages - 1;
-      start = end - visiblePageCount + 1;
+      start = totalPages - 3;
     }
 
     if (start > 2) {
@@ -161,5 +129,86 @@ class PaginationBar extends StatelessWidget {
     items.add(totalPages);
 
     return items;
+  }
+}
+
+class _PageButton extends StatelessWidget {
+  const _PageButton({
+    required this.page,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final int page;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    if (selected) {
+      return SizedBox(
+        width: 36,
+        height: 36,
+        child: FilledButton(
+          onPressed: null,
+          style: FilledButton.styleFrom(
+            padding: EdgeInsets.zero,
+            disabledBackgroundColor:
+                Theme.of(context).colorScheme.primary,
+            disabledForegroundColor:
+                Theme.of(context).colorScheme.onPrimary,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+          child: Text('$page'),
+        ),
+      );
+    }
+
+    return SizedBox(
+      width: 36,
+      height: 36,
+      child: TextButton(
+        onPressed: onPressed,
+        style: TextButton.styleFrom(
+          padding: EdgeInsets.zero,
+          minimumSize: const Size(36, 36),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+        child: Text('$page'),
+      ),
+    );
+  }
+}
+
+class _NavigationButton extends StatelessWidget {
+  const _NavigationButton({
+    required this.tooltip,
+    required this.icon,
+    required this.enabled,
+    required this.onPressed,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: enabled ? onPressed : null,
+      icon: Icon(icon),
+      iconSize: 22,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints.tightFor(
+        width: 36,
+        height: 36,
+      ),
+    );
   }
 }
