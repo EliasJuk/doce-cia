@@ -6,6 +6,7 @@ class AppDrawer extends StatelessWidget {
     required this.onThemesTap,
     required this.onAboutTap,
     required this.onSalesTap,
+    required this.onResultsTap,
     super.key,
   });
 
@@ -13,6 +14,7 @@ class AppDrawer extends StatelessWidget {
   final VoidCallback onThemesTap;
   final VoidCallback onAboutTap;
   final VoidCallback onSalesTap;
+  final VoidCallback onResultsTap;
 
   @override
   Widget build(BuildContext context) {
@@ -60,16 +62,19 @@ class AppDrawer extends StatelessWidget {
               onTap: onHomeTap,
             ),
             ListTile(
+              leading: const Icon(Icons.point_of_sale_outlined),
+              title: const Text('Vendas'),
+              onTap: onSalesTap,
+            ),
+            ListTile(
+              leading: const Icon(Icons.analytics_outlined),
+              title: const Text('Resultados'),
+              onTap: onResultsTap,
+            ),
+            ListTile(
               leading: const Icon(Icons.palette_rounded),
               title: const Text('Temas'),
               onTap: onThemesTap,
-            ),
-            ListTile(
-              leading: const Icon(
-                Icons.point_of_sale_outlined,
-              ),
-              title: const Text('Vendas'),
-              onTap: onSalesTap,
             ),
             const Spacer(),
             const Divider(height: 1),

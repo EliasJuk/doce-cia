@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/sales/sale.dart';
 import '../../repositories/sales/sale_repository.dart';
+import '../../shared/widgets/month_year_filter.dart';
 import '../../shared/widgets/pagination_bar.dart';
 import 'sale_form_page.dart';
 import 'widgets/sale_card.dart';
@@ -14,31 +15,30 @@ class SalesPage extends StatefulWidget {
 }
 
 class _SalesPageState extends State<SalesPage> {
-  // Quantidade de vendas exibidas em cada página.
-  static const int _pageSize = 3;
+  static const int _pageSize = 10;
 
   final SaleRepository _repository = SaleRepository();
   final ScrollController _scrollController = ScrollController();
 
   List<Sale> _sales = const [];
+  List<int> _availableYears = const [];
 
-  SalesTotals _totals = const SalesTotals(
-    totalSales: 0,
-    totalProfit: 0,
-  );
-
-  // Página atual baseada em 1.
+  int _selectedMonth = DateTime.now().month;
+  int _selectedYear = DateTime.now().year;
   int _currentPage = 1;
   int _totalItems = 0;
 
   bool _loading = true;
   String? _error;
 
-  int get _totalPages {
-    if (_totalItems == 0) {
-      return 0;
-    }
+  DateTime get _startDate =>
+      DateTime(_selectedYear, _selectedMonth, 1);
 
+  DateTime get _endDate =>
+      DateTime(_selectedYear, _selectedMonth + 1, 1);
+
+  int get _totalPages {
+    if (_totalItems == 0) return 0;
     return (_totalItems / _pageSize).ceil();
   }
 
@@ -49,8 +49,7 @@ class _SalesPageState extends State<SalesPage> {
   @override
   void initState() {
     super.initState();
-
-    _loadInitialData();
+    _loadData();
   }
 
   @override
@@ -59,7 +58,7 @@ class _SalesPageState extends State<SalesPage> {
     super.dispose();
   }
 
-  Future<void> _loadInitialData() async {
+  Future<void> _loadData() async {
     setState(() {
       _loading = true;
       _error = null;
@@ -67,43 +66,42 @@ class _SalesPageState extends State<SalesPage> {
 
     try {
       final results = await Future.wait<Object>([
-        _repository.countAll(),
-        _repository.calculateTotals(),
+        _repository.findAvailableYears(),
+        _repository.countByPeriod(
+          startDate: _startDate,
+          endDate: _endDate,
+        ),
       ]);
 
-      final totalItems = results[0] as int;
-      final totals = results[1] as SalesTotals;
-
-      if (!mounted) {
-        return;
-      }
+      final years = results[0] as List<int>;
+      final totalItems = results[1] as int;
 
       final totalPages = totalItems == 0
           ? 0
           : (totalItems / _pageSize).ceil();
 
-      if (totalPages > 0 && _currentPage > totalPages) {
+      if (totalPages == 0) {
+        _currentPage = 1;
+      } else if (_currentPage > totalPages) {
         _currentPage = totalPages;
       }
 
-      final sales = await _repository.findPage(
+      final sales = await _repository.findPageByPeriod(
+        startDate: _startDate,
+        endDate: _endDate,
         limit: _pageSize,
         offset: (_currentPage - 1) * _pageSize,
       );
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       setState(() {
+        _availableYears = years;
         _totalItems = totalItems;
-        _totals = totals;
         _sales = sales;
       });
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       setState(() {
         _error = error.toString();
@@ -131,14 +129,14 @@ class _SalesPageState extends State<SalesPage> {
     });
 
     try {
-      final sales = await _repository.findPage(
+      final sales = await _repository.findPageByPeriod(
+        startDate: _startDate,
+        endDate: _endDate,
         limit: _pageSize,
         offset: (page - 1) * _pageSize,
       );
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       setState(() {
         _currentPage = page;
@@ -153,9 +151,7 @@ class _SalesPageState extends State<SalesPage> {
         );
       }
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       setState(() {
         _error = error.toString();
@@ -169,29 +165,37 @@ class _SalesPageState extends State<SalesPage> {
     }
   }
 
-  Future<void> _reload() async {
-    await _loadInitialData();
+  Future<void> _changeMonth(int month) async {
+    setState(() {
+      _selectedMonth = month;
+      _currentPage = 1;
+    });
+
+    await _loadData();
   }
 
-  Future<void> _openForm([
-    Sale? sale,
-  ]) async {
+  Future<void> _changeYear(int year) async {
+    setState(() {
+      _selectedYear = year;
+      _currentPage = 1;
+    });
+
+    await _loadData();
+  }
+
+  Future<void> _openForm([Sale? sale]) async {
     final changed = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (_) => SaleFormPage(
-          sale: sale,
-        ),
+        builder: (_) => SaleFormPage(sale: sale),
       ),
     );
 
     if (changed == true) {
-      await _loadInitialData();
+      await _loadData();
     }
   }
 
-  Future<void> _deleteSale(
-    Sale sale,
-  ) async {
+  Future<void> _deleteSale(Sale sale) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
@@ -218,35 +222,13 @@ class _SalesPageState extends State<SalesPage> {
       },
     );
 
-    if (confirmed != true || sale.id == null) {
-      return;
-    }
+    if (confirmed != true || sale.id == null) return;
 
     try {
       await _repository.delete(sale.id!);
-
-      // Recarrega a contagem antes de buscar novamente a página.
-      final newTotalItems = await _repository.countAll();
-
-      if (!mounted) {
-        return;
-      }
-
-      final newTotalPages = newTotalItems == 0
-          ? 0
-          : (newTotalItems / _pageSize).ceil();
-
-      if (newTotalPages == 0) {
-        _currentPage = 1;
-      } else if (_currentPage > newTotalPages) {
-        _currentPage = newTotalPages;
-      }
-
-      await _loadInitialData();
+      await _loadData();
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -258,12 +240,12 @@ class _SalesPageState extends State<SalesPage> {
     }
   }
 
-  String _money(double value) {
-    return 'R\$ ${value.toStringAsFixed(2).replaceAll('.', ',')}';
-  }
-
   @override
   Widget build(BuildContext context) {
+    final years = _availableYears.isEmpty
+        ? [_selectedYear]
+        : _availableYears;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Vendas'),
@@ -281,9 +263,19 @@ class _SalesPageState extends State<SalesPage> {
       ),
       body: Column(
         children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: MonthYearFilter(
+              month: _selectedMonth,
+              year: _selectedYear,
+              availableYears: years,
+              onMonthChanged: _changeMonth,
+              onYearChanged: _changeYear,
+            ),
+          ),
           Expanded(
             child: RefreshIndicator(
-              onRefresh: _reload,
+              onRefresh: _loadData,
               child: _buildContent(context),
             ),
           ),
@@ -312,7 +304,7 @@ class _SalesPageState extends State<SalesPage> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(24),
         children: [
-          const SizedBox(height: 100),
+          const SizedBox(height: 80),
           Icon(
             Icons.error_outline_rounded,
             size: 64,
@@ -324,15 +316,9 @@ class _SalesPageState extends State<SalesPage> {
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.titleLarge,
           ),
-          const SizedBox(height: 8),
-          Text(
-            _error!,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
           const SizedBox(height: 16),
           FilledButton(
-            onPressed: _reload,
+            onPressed: _loadData,
             child: const Text('Tentar novamente'),
           ),
         ],
@@ -344,7 +330,7 @@ class _SalesPageState extends State<SalesPage> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(32),
         children: [
-          const SizedBox(height: 100),
+          const SizedBox(height: 80),
           Icon(
             Icons.point_of_sale_outlined,
             size: 72,
@@ -352,13 +338,13 @@ class _SalesPageState extends State<SalesPage> {
           ),
           const SizedBox(height: 18),
           Text(
-            'Nenhuma venda registrada',
+            'Nenhuma venda neste período',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 8),
           Text(
-            'Use o botão + para registrar a primeira venda.',
+            'Altere o mês e o ano ou registre uma nova venda.',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium,
           ),
@@ -369,18 +355,22 @@ class _SalesPageState extends State<SalesPage> {
     return ListView.builder(
       controller: _scrollController,
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(
-        16,
-        16,
-        16,
-        100,
-      ),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
       itemCount: 1 + _sales.length,
       itemBuilder: (context, index) {
         if (index == 0) {
+          final firstItem = _currentOffset + 1;
+          final lastItem = (_currentOffset + _sales.length)
+              .clamp(0, _totalItems);
+
           return Padding(
-            padding: const EdgeInsets.only(bottom: 18),
-            child: _buildSummary(),
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              'Exibindo $firstItem–$lastItem '
+              'de $_totalItems vendas',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
           );
         }
 
@@ -396,77 +386,6 @@ class _SalesPageState extends State<SalesPage> {
           },
         );
       },
-    );
-  }
-
-  Widget _buildSummary() {
-    final firstItem = _currentOffset + 1;
-    final lastItem = (_currentOffset + _sales.length)
-        .clamp(0, _totalItems);
-
-    return Column(
-      children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Column(
-              children: [
-                _SalesSummaryRow(
-                  label: 'Total vendido',
-                  value: _money(_totals.totalSales),
-                ),
-                const Divider(height: 24),
-                _SalesSummaryRow(
-                  label: 'Resultado bruto',
-                  value: _money(_totals.totalProfit),
-                  emphasized: true,
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Exibindo $firstItem–$lastItem de $_totalItems vendas',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-      ],
-    );
-  }
-}
-
-class _SalesSummaryRow extends StatelessWidget {
-  const _SalesSummaryRow({
-    required this.label,
-    required this.value,
-    this.emphasized = false,
-  });
-
-  final String label;
-  final String value;
-  final bool emphasized;
-
-  @override
-  Widget build(BuildContext context) {
-    final style = emphasized
-        ? Theme.of(context).textTheme.titleMedium
-        : Theme.of(context).textTheme.bodyLarge;
-
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            label,
-            style: style,
-          ),
-        ),
-        Text(
-          value,
-          style: style?.copyWith(
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ],
     );
   }
 }

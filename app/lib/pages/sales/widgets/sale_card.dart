@@ -41,73 +41,53 @@ class SaleCard extends StatelessWidget {
         onTap: onEdit,
         borderRadius: BorderRadius.circular(24),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            18,
-            16,
-            8,
-            16,
-          ),
+          padding: const EdgeInsets.fromLTRB(18, 16, 8, 16),
           child: Row(
             children: [
               CircleAvatar(
                 radius: 25,
                 backgroundColor:
                     Theme.of(context).colorScheme.primaryContainer,
-                child: const Icon(
-                  Icons.point_of_sale_rounded,
-                ),
+                child: const Icon(Icons.point_of_sale_rounded),
               ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       sale.recipeName,
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleMedium,
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 4),
                     Text(
                       '${_number(sale.quantity)} × '
                       '${_money(sale.unitPrice)}',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyMedium,
+                      style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 4),
                     Text(
                       '${_date(sale.saleDate)} • '
                       'Total ${_money(sale.totalValue)}',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyMedium,
+                      style: Theme.of(context).textTheme.bodyMedium,
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      'Resultado bruto: '
-                      '${_money(sale.grossProfit)}',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyMedium
-                          ?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
-                    ),
+                    if (sale.notes != null &&
+                        sale.notes!.trim().isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        sale.notes!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ],
                   ],
                 ),
               ),
               PopupMenuButton<String>(
                 onSelected: (value) {
-                  if (value == 'edit') {
-                    onEdit();
-                  }
-
-                  if (value == 'delete') {
-                    onDelete();
-                  }
+                  if (value == 'edit') onEdit();
+                  if (value == 'delete') onDelete();
                 },
                 itemBuilder: (context) {
                   return const [

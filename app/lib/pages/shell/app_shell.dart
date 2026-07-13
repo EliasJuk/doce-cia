@@ -7,8 +7,9 @@ import '../about/about_page.dart';
 import '../home/home_page.dart';
 import '../ingredients/ingredients_page.dart';
 import '../recipes/recipes_page.dart';
-import '../themes/themes_page.dart';
+import '../results/results_page.dart';
 import '../sales/sales_page.dart';
+import '../themes/themes_page.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({
@@ -82,6 +83,16 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
+  void _openResults() {
+    Navigator.of(context).pop();
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const ResultsPage(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -93,6 +104,7 @@ class _AppShellState extends State<AppShell> {
         onThemesTap: _openThemes,
         onAboutTap: _openAbout,
         onSalesTap: _openSales,
+        onResultsTap: _openResults,
       ),
       body: IndexedStack(
         index: _selectedIndex,
