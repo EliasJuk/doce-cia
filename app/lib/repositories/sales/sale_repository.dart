@@ -1,4 +1,6 @@
 import '../../core/database/app_database.dart';
+import '../../models/results/sales_by_recipe.dart';
+import '../../models/results/sales_period_totals.dart';
 import '../../models/sales/sale.dart';
 
 class SaleRepository {
@@ -8,7 +10,9 @@ class SaleRepository {
 
   final AppDatabase _database;
 
-  Future<List<Sale>> findPage({
+  Future<List<Sale>> findPageByPeriod({
+    required DateTime startDate,
+    required DateTime endDate,
     required int limit,
     required int offset,
   }) async {
@@ -16,6 +20,11 @@ class SaleRepository {
 
     final rows = await database.query(
       'sales',
+      where: 'sale_date >= ? AND sale_date < ?',
+      whereArgs: [
+        startDate.toIso8601String(),
+        endDate.toIso8601String(),
+      ],
       orderBy: 'sale_date DESC, id DESC',
       limit: limit,
       offset: offset,
@@ -24,51 +33,121 @@ class SaleRepository {
     return rows.map(Sale.fromMap).toList();
   }
 
-  Future<int> countAll() async {
+  Future<int> countByPeriod({
+    required DateTime startDate,
+    required DateTime endDate,
+  }) async {
     final database = await _database.database;
 
-    final result = await database.rawQuery(
+    final rows = await database.rawQuery(
       '''
       SELECT COUNT(*) AS total
       FROM sales
+      WHERE sale_date >= ?
+        AND sale_date < ?
       ''',
+      [
+        startDate.toIso8601String(),
+        endDate.toIso8601String(),
+      ],
     );
 
-    final value = result.first['total'];
-
-    if (value is num) {
-      return value.toInt();
-    }
-
-    return int.tryParse(value?.toString() ?? '') ?? 0;
+    return _readInt(rows.first['total']);
   }
 
-  Future<SalesTotals> calculateTotals() async {
+  Future<SalesPeriodTotals> calculateTotalsByPeriod({
+    required DateTime startDate,
+    required DateTime endDate,
+  }) async {
     final database = await _database.database;
 
-    final rows = await database.rawQuery('''
+    final rows = await database.rawQuery(
+      '''
       SELECT
-        COALESCE(
-          SUM(quantity * unit_price),
-          0
-        ) AS total_sales,
-
+        COALESCE(SUM(quantity * unit_price), 0) AS gross_revenue,
+        COALESCE(SUM(quantity * unit_cost), 0) AS production_costs,
         COALESCE(
           SUM(
             (quantity * unit_price) -
             (quantity * unit_cost)
           ),
           0
-        ) AS total_profit
+        ) AS profit,
+        COUNT(*) AS sales_count
       FROM sales
-    ''');
+      WHERE sale_date >= ?
+        AND sale_date < ?
+      ''',
+      [
+        startDate.toIso8601String(),
+        endDate.toIso8601String(),
+      ],
+    );
 
     final row = rows.first;
 
-    return SalesTotals(
-      totalSales: _readDouble(row['total_sales']),
-      totalProfit: _readDouble(row['total_profit']),
+    return SalesPeriodTotals(
+      grossRevenue: _readDouble(row['gross_revenue']),
+      productionCosts: _readDouble(row['production_costs']),
+      profit: _readDouble(row['profit']),
+      salesCount: _readInt(row['sales_count']),
     );
+  }
+
+  Future<List<SalesByRecipe>> findSalesByRecipeByPeriod({
+    required DateTime startDate,
+    required DateTime endDate,
+  }) async {
+    final database = await _database.database;
+
+    final rows = await database.rawQuery(
+      '''
+      SELECT
+        recipe_name,
+        COALESCE(SUM(quantity), 0) AS total_quantity
+      FROM sales
+      WHERE sale_date >= ?
+        AND sale_date < ?
+      GROUP BY recipe_name
+      ORDER BY total_quantity DESC, recipe_name ASC
+      ''',
+      [
+        startDate.toIso8601String(),
+        endDate.toIso8601String(),
+      ],
+    );
+
+    return rows.map((row) {
+      return SalesByRecipe(
+        recipeName: row['recipe_name'] as String,
+        quantity: _readDouble(row['total_quantity']),
+      );
+    }).toList();
+  }
+
+  Future<List<int>> findAvailableYears() async {
+    final database = await _database.database;
+
+    final rows = await database.rawQuery(
+      '''
+      SELECT DISTINCT
+        CAST(strftime('%Y', sale_date) AS INTEGER) AS year
+      FROM sales
+      ORDER BY year DESC
+      ''',
+    );
+
+    final years = rows
+        .map((row) => _readInt(row['year']))
+        .where((year) => year > 0)
+        .toSet();
+
+    years.add(DateTime.now().year);
+
+    final result = years.toList()
+      ..sort((a, b) => b.compareTo(a));
+
+    return result;
   }
 
   Future<Sale?> findById(int id) async {
@@ -81,10 +160,7 @@ class SaleRepository {
       limit: 1,
     );
 
-    if (rows.isEmpty) {
-      return null;
-    }
-
+    if (rows.isEmpty) return null;
     return Sale.fromMap(rows.first);
   }
 
@@ -143,25 +219,19 @@ class SaleRepository {
 
     final recipeRows = await database.query(
       'recipes',
-      columns: [
-        'yield_quantity',
-      ],
+      columns: ['yield_quantity'],
       where: 'id = ?',
       whereArgs: [recipeId],
       limit: 1,
     );
 
-    if (recipeRows.isEmpty) {
-      return 0;
-    }
+    if (recipeRows.isEmpty) return 0;
 
     final yieldQuantity = _readDouble(
       recipeRows.first['yield_quantity'],
     );
 
-    if (yieldQuantity <= 0) {
-      return 0;
-    }
+    if (yieldQuantity <= 0) return 0;
 
     final rows = await database.rawQuery(
       '''
@@ -182,41 +252,23 @@ class SaleRepository {
     double recipeCost = 0;
 
     for (final row in rows) {
-      final quantity = _readDouble(
-        row['quantity'],
-      );
-
+      final quantity = _readDouble(row['quantity']);
       final unit = row['unit'] as String;
-
-      final purchasePrice = _readDouble(
-        row['purchase_price'],
-      );
-
-      final baseQuantity = _readDouble(
-        row['base_quantity'],
-      );
-
+      final purchasePrice = _readDouble(row['purchase_price']);
+      final baseQuantity = _readDouble(row['base_quantity']);
       final baseUnit = row['base_unit'] as String;
 
-      if (baseQuantity <= 0) {
-        continue;
-      }
+      if (baseQuantity <= 0) continue;
 
-      final quantityInBaseUnit = _convertToBaseUnit(
+      final converted = _convertToBaseUnit(
         quantity: quantity,
         unit: unit,
         baseUnit: baseUnit,
       );
 
-      if (quantityInBaseUnit == null) {
-        continue;
-      }
+      if (converted == null) continue;
 
-      final baseUnitCost =
-          purchasePrice / baseQuantity;
-
-      recipeCost +=
-          quantityInBaseUnit * baseUnitCost;
+      recipeCost += converted * (purchasePrice / baseQuantity);
     }
 
     return recipeCost / yieldQuantity;
@@ -227,47 +279,21 @@ class SaleRepository {
     required String unit,
     required String baseUnit,
   }) {
-    if (unit == baseUnit) {
-      return quantity;
-    }
-
-    if (unit == 'kg' && baseUnit == 'g') {
-      return quantity * 1000;
-    }
-
-    if (unit == 'g' && baseUnit == 'kg') {
-      return quantity / 1000;
-    }
-
-    if (unit == 'L' && baseUnit == 'ml') {
-      return quantity * 1000;
-    }
-
-    if (unit == 'ml' && baseUnit == 'L') {
-      return quantity / 1000;
-    }
-
+    if (unit == baseUnit) return quantity;
+    if (unit == 'kg' && baseUnit == 'g') return quantity * 1000;
+    if (unit == 'g' && baseUnit == 'kg') return quantity / 1000;
+    if (unit == 'L' && baseUnit == 'ml') return quantity * 1000;
+    if (unit == 'ml' && baseUnit == 'L') return quantity / 1000;
     return null;
   }
 
-  double _readDouble(Object? value) {
-    if (value is num) {
-      return value.toDouble();
-    }
-
-    return double.tryParse(
-          value?.toString() ?? '',
-        ) ??
-        0;
+  int _readInt(Object? value) {
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
   }
-}
 
-class SalesTotals {
-  const SalesTotals({
-    required this.totalSales,
-    required this.totalProfit,
-  });
-
-  final double totalSales;
-  final double totalProfit;
+  double _readDouble(Object? value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '') ?? 0;
+  }
 }
