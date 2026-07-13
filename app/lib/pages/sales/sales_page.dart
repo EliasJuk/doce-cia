@@ -267,6 +267,17 @@ class _SalesPageState extends State<SalesPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Vendas'),
+        actions: [
+          IconButton(
+            tooltip: 'Nova venda',
+            onPressed: _loading
+                ? null
+                : () {
+                    _openForm();
+                  },
+            icon: const Icon(Icons.add_rounded),
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -285,15 +296,6 @@ class _SalesPageState extends State<SalesPage> {
               onPageChanged: _loadPage,
             ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        heroTag: 'add_sale',
-        onPressed: _loading
-            ? null
-            : () {
-                _openForm();
-              },
-        child: const Icon(Icons.add_rounded),
       ),
     );
   }
