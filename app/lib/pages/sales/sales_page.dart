@@ -31,14 +31,27 @@ class _SalesPageState extends State<SalesPage> {
   bool _loading = true;
   String? _error;
 
-  DateTime get _startDate =>
-      DateTime(_selectedYear, _selectedMonth, 1);
+  DateTime get _startDate {
+    return DateTime(
+      _selectedYear,
+      _selectedMonth,
+      1,
+    );
+  }
 
-  DateTime get _endDate =>
-      DateTime(_selectedYear, _selectedMonth + 1, 1);
+  DateTime get _endDate {
+    return DateTime(
+      _selectedYear,
+      _selectedMonth + 1,
+      1,
+    );
+  }
 
   int get _totalPages {
-    if (_totalItems == 0) return 0;
+    if (_totalItems == 0) {
+      return 0;
+    }
+
     return (_totalItems / _pageSize).ceil();
   }
 
@@ -46,15 +59,25 @@ class _SalesPageState extends State<SalesPage> {
     return (_currentPage - 1) * _pageSize;
   }
 
+  double get _floatingButtonBottom {
+    return _totalPages > 1 ? 78 : 20;
+  }
+
+  double get _listBottomPadding {
+    return _totalPages > 1 ? 140 : 100;
+  }
+
   @override
   void initState() {
     super.initState();
+
     _loadData();
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
+
     super.dispose();
   }
 
@@ -73,7 +96,7 @@ class _SalesPageState extends State<SalesPage> {
         ),
       ]);
 
-      final years = results[0] as List<int>;
+      final availableYears = results[0] as List<int>;
       final totalItems = results[1] as int;
 
       final totalPages = totalItems == 0
@@ -93,15 +116,19 @@ class _SalesPageState extends State<SalesPage> {
         offset: (_currentPage - 1) * _pageSize,
       );
 
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       setState(() {
-        _availableYears = years;
+        _availableYears = availableYears;
         _totalItems = totalItems;
         _sales = sales;
       });
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       setState(() {
         _error = error.toString();
@@ -136,7 +163,9 @@ class _SalesPageState extends State<SalesPage> {
         offset: (page - 1) * _pageSize,
       );
 
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       setState(() {
         _currentPage = page;
@@ -146,12 +175,16 @@ class _SalesPageState extends State<SalesPage> {
       if (_scrollController.hasClients) {
         await _scrollController.animateTo(
           0,
-          duration: const Duration(milliseconds: 250),
+          duration: const Duration(
+            milliseconds: 250,
+          ),
           curve: Curves.easeOut,
         );
       }
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       setState(() {
         _error = error.toString();
@@ -183,10 +216,14 @@ class _SalesPageState extends State<SalesPage> {
     await _loadData();
   }
 
-  Future<void> _openForm([Sale? sale]) async {
+  Future<void> _openForm([
+    Sale? sale,
+  ]) async {
     final changed = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (_) => SaleFormPage(sale: sale),
+        builder: (_) => SaleFormPage(
+          sale: sale,
+        ),
       ),
     );
 
@@ -195,7 +232,9 @@ class _SalesPageState extends State<SalesPage> {
     }
   }
 
-  Future<void> _deleteSale(Sale sale) async {
+  Future<void> _deleteSale(
+    Sale sale,
+  ) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
@@ -207,13 +246,19 @@ class _SalesPageState extends State<SalesPage> {
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.pop(dialogContext, false);
+                Navigator.pop(
+                  dialogContext,
+                  false,
+                );
               },
               child: const Text('Cancelar'),
             ),
             FilledButton(
               onPressed: () {
-                Navigator.pop(dialogContext, true);
+                Navigator.pop(
+                  dialogContext,
+                  true,
+                );
               },
               child: const Text('Excluir'),
             ),
@@ -222,13 +267,17 @@ class _SalesPageState extends State<SalesPage> {
       },
     );
 
-    if (confirmed != true || sale.id == null) return;
+    if (confirmed != true || sale.id == null) {
+      return;
+    }
 
     try {
       await _repository.delete(sale.id!);
       await _loadData();
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -249,44 +298,57 @@ class _SalesPageState extends State<SalesPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Vendas'),
-        actions: [
-          IconButton(
-            tooltip: 'Nova venda',
-            onPressed: _loading
-                ? null
-                : () {
-                    _openForm();
-                  },
-            icon: const Icon(Icons.add_rounded),
-          ),
-        ],
       ),
-      body: Column(
+      body: Stack(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: MonthYearFilter(
-              month: _selectedMonth,
-              year: _selectedYear,
-              availableYears: years,
-              onMonthChanged: _changeMonth,
-              onYearChanged: _changeYear,
+          Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  16,
+                  12,
+                  16,
+                  8,
+                ),
+                child: MonthYearFilter(
+                  month: _selectedMonth,
+                  year: _selectedYear,
+                  availableYears: years,
+                  onMonthChanged: _changeMonth,
+                  onYearChanged: _changeYear,
+                ),
+              ),
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: _loadData,
+                  child: _buildContent(context),
+                ),
+              ),
+              if (!_loading &&
+                  _error == null &&
+                  _totalPages > 1)
+                PaginationBar(
+                  currentPage: _currentPage,
+                  totalPages: _totalPages,
+                  onPageChanged: _loadPage,
+                ),
+            ],
+          ),
+          Positioned(
+            right: 20,
+            bottom: _floatingButtonBottom,
+            child: FloatingActionButton(
+              heroTag: 'add_sale',
+              onPressed: _loading
+                  ? null
+                  : () {
+                      _openForm();
+                    },
+              child: const Icon(
+                Icons.add_rounded,
+              ),
             ),
           ),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: _loadData,
-              child: _buildContent(context),
-            ),
-          ),
-          if (!_loading &&
-              _error == null &&
-              _totalPages > 1)
-            PaginationBar(
-              currentPage: _currentPage,
-              totalPages: _totalPages,
-              onPageChanged: _loadPage,
-            ),
         ],
       ),
     );
@@ -319,7 +381,9 @@ class _SalesPageState extends State<SalesPage> {
           const SizedBox(height: 16),
           FilledButton(
             onPressed: _loadData,
-            child: const Text('Tentar novamente'),
+            child: const Text(
+              'Tentar novamente',
+            ),
           ),
         ],
       );
@@ -355,16 +419,25 @@ class _SalesPageState extends State<SalesPage> {
     return ListView.builder(
       controller: _scrollController,
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        8,
+        16,
+        _listBottomPadding,
+      ),
       itemCount: 1 + _sales.length,
       itemBuilder: (context, index) {
         if (index == 0) {
           final firstItem = _currentOffset + 1;
-          final lastItem = (_currentOffset + _sales.length)
-              .clamp(0, _totalItems);
+
+          final lastItem =
+              (_currentOffset + _sales.length)
+                  .clamp(0, _totalItems);
 
           return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.only(
+              bottom: 12,
+            ),
             child: Text(
               'Exibindo $firstItem–$lastItem '
               'de $_totalItems vendas',

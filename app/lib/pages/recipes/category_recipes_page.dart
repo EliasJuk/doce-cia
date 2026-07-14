@@ -50,6 +50,14 @@ class _CategoryRecipesPageState
     return (_currentPage - 1) * _pageSize;
   }
 
+  double get _floatingButtonBottom {
+    return _totalPages > 1 ? 78 : 20;
+  }
+
+  double get _listBottomPadding {
+    return _totalPages > 1 ? 140 : 100;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -228,36 +236,43 @@ class _CategoryRecipesPageState
         title: Text(
           widget.category.name,
         ),
-        actions: [
-          IconButton(
-            tooltip: 'Nova receita',
-            onPressed: _loading
-                ? null
-                : () {
-                    _openRecipeForm();
-                  },
-            icon: const Icon(
-              Icons.add_rounded,
-            ),
-          ),
-        ],
       ),
-      body: Column(
+      body: Stack(
         children: [
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: _loadRecipes,
-              child: _buildContent(context),
+          Column(
+            children: [
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: _loadRecipes,
+                  child: _buildContent(context),
+                ),
+              ),
+              if (!_loading &&
+                  _error == null &&
+                  _totalPages > 1)
+                PaginationBar(
+                  currentPage: _currentPage,
+                  totalPages: _totalPages,
+                  onPageChanged: _loadPage,
+                ),
+            ],
+          ),
+          Positioned(
+            right: 20,
+            bottom: _floatingButtonBottom,
+            child: FloatingActionButton(
+              heroTag:
+                  'add_recipe_${widget.category.id}',
+              onPressed: _loading
+                  ? null
+                  : () {
+                      _openRecipeForm();
+                    },
+              child: const Icon(
+                Icons.add_rounded,
+              ),
             ),
           ),
-          if (!_loading &&
-              _error == null &&
-              _totalPages > 1)
-            PaginationBar(
-              currentPage: _currentPage,
-              totalPages: _totalPages,
-              onPageChanged: _loadPage,
-            ),
         ],
       ),
     );
@@ -289,13 +304,6 @@ class _CategoryRecipesPageState
             textAlign: TextAlign.center,
             style:
                 Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _error!,
-            textAlign: TextAlign.center,
-            style:
-                Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 16),
           FilledButton(
@@ -345,11 +353,11 @@ class _CategoryRecipesPageState
       controller: _scrollController,
       physics:
           const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(
+      padding: EdgeInsets.fromLTRB(
         16,
         16,
         16,
-        80,
+        _listBottomPadding,
       ),
       itemCount: 1 + _recipes.length,
       itemBuilder: (context, index) {

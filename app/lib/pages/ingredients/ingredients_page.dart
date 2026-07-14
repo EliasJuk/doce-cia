@@ -50,6 +50,14 @@ class _IngredientsPageState
     return (_currentPage - 1) * _pageSize;
   }
 
+  double get _floatingButtonBottom {
+    return _totalPages > 1 ? 78 : 20;
+  }
+
+  double get _listBottomPadding {
+    return _totalPages > 1 ? 140 : 100;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -83,7 +91,8 @@ class _IngredientsPageState
     });
 
     try {
-      final totalItems = await _repository.countAll();
+      final totalItems =
+          await _repository.countAll();
 
       final totalPages = totalItems == 0
           ? 0
@@ -95,7 +104,8 @@ class _IngredientsPageState
         _currentPage = totalPages;
       }
 
-      final ingredients = await _repository.findPage(
+      final ingredients =
+          await _repository.findPage(
         limit: _pageSize,
         offset: (_currentPage - 1) * _pageSize,
       );
@@ -139,7 +149,8 @@ class _IngredientsPageState
     });
 
     try {
-      final ingredients = await _repository.findPage(
+      final ingredients =
+          await _repository.findPage(
         limit: _pageSize,
         offset: (page - 1) * _pageSize,
       );
@@ -242,8 +253,6 @@ class _IngredientsPageState
         ingredient.id!,
       );
 
-      // Caso o último item da última página seja excluído,
-      // o método ajustará automaticamente a página atual.
       await _load();
     } catch (_) {
       if (!mounted) {
@@ -283,11 +292,9 @@ class _IngredientsPageState
               ),
           ],
         ),
-
-        // O botão fica acima da barra de paginação.
         Positioned(
           right: 20,
-          bottom: _totalPages > 1 ? 76 : 20,
+          bottom: _floatingButtonBottom,
           child: FloatingActionButton(
             heroTag: 'add_ingredient',
             onPressed: _loading
@@ -331,13 +338,6 @@ class _IngredientsPageState
             style:
                 Theme.of(context).textTheme.titleLarge,
           ),
-          const SizedBox(height: 8),
-          Text(
-            _error!,
-            textAlign: TextAlign.center,
-            style:
-                Theme.of(context).textTheme.bodyMedium,
-          ),
           const SizedBox(height: 16),
           FilledButton(
             onPressed: _load,
@@ -366,11 +366,11 @@ class _IngredientsPageState
       controller: _scrollController,
       physics:
           const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(
+      padding: EdgeInsets.fromLTRB(
         16,
         16,
         16,
-        100,
+        _listBottomPadding,
       ),
       itemCount: 1 + _ingredients.length,
       itemBuilder: (context, index) {
